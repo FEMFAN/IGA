@@ -40,7 +40,7 @@ loadcurve(1).value = [1   1];
 % 3: displacement/force direction (1=x, 2=y), 4: loadID, 5: displacement/force value]
 
 if load_flag ==1 %tension
-    
+
     if drive_flag ==1
         if k ==1
             u_pre =  [1,1,2,1,0;
@@ -50,72 +50,78 @@ if load_flag ==1 %tension
                 1,4,1,1,0;
                 1,5,1,1,0;
                 1,6,1,1,0;
+                1,7,1,1,0; %
                 n,1,1,1,dvalue;
                 n,2,1,1,dvalue;
                 n,3,1,1,dvalue;
                 n,4,1,1,dvalue;
                 n,5,1,1,dvalue;
-                n,6,1,1,dvalue];
-            
-            
-            
+                n,6,1,1,dvalue
+                n,7,1,1,dvalue]; %
+
+
+
             f_pre = [0,0,0,1,0];
-            
+
         elseif k == 2
+
             if step > 1 & step < 6
                 for i = 1:step-1
-%                     u_pre =  [1,2,1,1,0;
-%                         1,3,1,1,0;
-%                         1,4,1,1,0;
-%                         1,5,1,1,0;
-%                         1,6,1,1,0;
-%                         1,7,1,1,0];
-                    u_pre(i,:) = [1,i+1,1,1,0];
-                    u_pre_2(i,:) = [n,i+1,1,1,dvalue];
+                    %                     u_pre =  [1,2,1,1,0;
+                    %                         1,3,1,1,0;
+                    %                         1,4,1,1,0;
+                    %                         1,5,1,1,0;
+                    %                         1,6,1,1,0;
+                    %                         1,7,1,1,0];
+                    u_pre(i,:) = [1,i,1,1,0];
+                    u_pre_2(i,:) = [n,i,1,1,dvalue];
                 end
                 u_pre = [u_pre; u_pre_2];
-                
+
                 f_pre = [0,0,0,1,0];
             elseif step ==6
                 for i = 1:step
-                    u_pre =  [1,2,1,1,0;
+                    u_pre =  [1,1,1,1,0;
+                        1,2,1,1,0;
                         1,3,1,1,0;
                         1,4,1,1,0;
                         1,5,1,1,0;
                         1,6,1,1,0;
                         1,7,1,1,0];
-                    
-                    u_pre_2(i,:) = [n,i+1,1,1,dvalue];
+
+                    u_pre_2(i,:) = [n,i,1,1,dvalue];
                 end
                 u_pre = [u_pre; u_pre_2];
-                
+
                 f_pre = [0,0,0,1,0];
             else
-                u_pre =  [1,2,1,1,0;
+                u_pre =  [1,1,1,1,0;
+                    1,2,1,1,0;
                     1,3,1,1,0;
                     1,4,1,1,0;
                     1,5,1,1,0;
                     1,6,1,1,0;
-                    1,7,1,1,0];
-                u_pre = [];
+                    1,7,1,1,0
+                    n,1,1,1,dvalue];
+                %u_pre = [];
                 f_pre = [0,0,0,1,0];
-                
+
             end
-            
+
         elseif k==3
             u_pre = [n-(8-step),0,ldir,1,dvalue];
-            
+
             f_pre = [0,0,0,1,0];
         end
-        
+
     elseif drive_flag ==2
         if k == 1
-            
+
             u_pre = [1,0,1,1,0;
                 1,1,2,1,0];
             f_pre = [0,0,0,1,0];
         elseif k == 2
-            
+
             u_pre = [];
             f_pre = [n,1,ldir,1,fvalue];
             if m==2
@@ -156,7 +162,7 @@ if load_flag ==1 %tension
             f_pre = [n,1,ldir,1,fvalue];
         elseif k ==3
             u_pre = [];
-            
+
             if m==2
                 f_pre = [n,1,ldir,1,fvalue/m; %for m=2
                     n,2,ldir,1,fvalue/m;];
@@ -194,13 +200,13 @@ if load_flag ==1 %tension
             end
             %f_pre = [n,1,ldir,1,fvalue];
         end
-        
+
     end
-    
+
 elseif load_flag ==2    % shear
-    
+
     if drive_flag ==1
-        
+
         u_pre = [1,0,1,1,0;
             1,0,2,1,0;
             n,0,1,1,0;
@@ -208,18 +214,18 @@ elseif load_flag ==2    % shear
         %       for i=2:(n-1) %set x-displacement of middle nodes to zero for homogeneous shear
         %           u_pre(end+1,:) = [i,0,1,1,0];
         %       end
-        
+
         f_pre = [0,0,0,1,0];
-        
+
     elseif drive_flag ==2
-        
+
         u_pre = [1,0,1,1,0;
             1,0,2,1,0;
             n,0,1,1,0];
         for i=2:(n-1) %set x-displacement of middle nodes to zero for homogenous shear
             u_pre(end+1,:) = [i,0,1,1,0];
         end
-        
+
         if m==2
             f_pre = [n,1,ldir,1,fvalue/m; %for m=2
                 n,2,ldir,1,fvalue/m;];
@@ -246,9 +252,9 @@ elseif load_flag ==2    % shear
         else
             error('Check m for Neumann boundary conditions!');
         end
-        
+
     end
-    
+
 end
 
 % body force aka gravity

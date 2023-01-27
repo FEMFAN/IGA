@@ -12,8 +12,8 @@ close all;
 clear all;
 format short;
 % set paths for all subroutines
-set_paths % for Windows
-%set_paths_2 % for Linux
+%set_paths % for Windows
+set_paths_2 % for Linux
 %% Input data for geometry
 % call input data (control points, weights, knot vectors,...)
 % Remark: control points have to be sorted by curves in the input file!
@@ -379,7 +379,7 @@ for step = 1:nsteps
                         for j = 1:patches(pl).tdm
                             for k = 1:patches(pl).tdm
                                 for l = 1:patches(pl).tdm
-                                    sig(i,j) = sig(i,j) + (Death>1e-3)*patches(pl).E_4(i,j,k,l)*eps(k,l);
+                                    sig(i,j) = sig(i,j) + patches(pl).E_4(i,j,k,l)*eps(k,l); %stresses should not be manipulated (Death>1e-3)*
                                 end
                             end
                         end
@@ -471,7 +471,7 @@ for step = 1:nsteps
         end
         
         %calculations of the displacements
-        [patches,rsn,iter] = calculator(patches,np,iter,tolerance,maxiter,continuity_flag,IM,PM,CM,D1_flag,material_flag);
+        [patches,rsn,iter] = calculator(patches,np,iter,tolerance,maxiter,continuity_flag,IM,PM,CM,D1_flag,material_flag,lr_refinement_flag);
         
         
     end % Newton loop

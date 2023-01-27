@@ -1,4 +1,4 @@
-function [patches,rsn,iter] = calculator(patches,np,iter,tolerance,maxiter,continuity_flag,IM,PM,CM,D1_flag,material_flag)
+function [patches,rsn,iter] = calculator(patches,np,iter,tolerance,maxiter,continuity_flag,IM,PM,CM,D1_flag,material_flag,lr_refinement_flag)
 % ---------------------------------------------------------------------
 % Subroutine Taschenrechner.m
 % calculation of the displacements increments in every time step. The used
@@ -24,6 +24,10 @@ function [patches,rsn,iter] = calculator(patches,np,iter,tolerance,maxiter,conti
 %           rsn                                     - rsn of the newton loop
 %           iter                                    - iteration number of the newton loop
 %---------------------------------------------------------------------- 
+
+%determine if local refinement was used
+local_refinement_flag = any(lr_refinement_flag);
+
 % multiple patch C^1 continuity
 if continuity_flag ==1
     %check if 2 material example is loaded
@@ -585,7 +589,7 @@ if continuity_flag ==1
 end
 
 %multiple patch C0 continuity
-if continuity_flag == 0
+if continuity_flag == 0 && local_refinement_flag == 1
     %begin residuum
     %initialise the residuum for all not combined parts of the body
     rsd = [];
@@ -613,7 +617,8 @@ if continuity_flag == 0
                 else
                     Ts1m1 = pinv(patches(s).Extract_op(p).A1) *patches(ma).Extract_op(i).A1;
                 end
-                
+                %set the extension operator to a empty matrix
+                Ts1m1 = [];
                 rsd_p = patches(ma).fint(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs)) - patches(ma).fext(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs)) +...
                     Ts1m1'*patches(s).fint(intersect(patches(s).Int_Dofs(p).KP_f,patches(s).freeDofs)) - Ts1m1'*patches(s).fext(intersect(patches(s).Int_Dofs(p).KP_f,patches(s).freeDofs));
                 rsd = [rsd; rsd_p];
@@ -796,6 +801,231 @@ if continuity_flag == 0
                     end
                     patches(s).u(intersect(patches(s).Int_Dofs(p).KP_f,patches(s).freeDofs)) = ...
                         Ts1m1 *  patches(ma).u(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs));
+                end
+            end
+        end
+        iter = iter +1;
+        if iter == maxiter
+            close all
+            error('No convergence in Newton scheme!')
+        end
+        
+    end
+    
+end
+%multiple patch C0 continuity and no local refinement
+if continuity_flag == 0 && local_refinement_flag == 0
+    %begin residuum
+    %initialise the residuum for all not combined parts of the body
+    rsd = [];
+    for pl = 1:np
+        rsd_p = patches(pl).fint(intersect(patches(pl).Int_Dofs(1).KP_n,patches(pl).freeDofs)) - patches(pl).fext(intersect(patches(pl).Int_Dofs(1).KP_n,patches(pl).freeDofs));
+        rsd = [rsd; rsd_p];
+    end
+    A = size(rsd,1);
+    %now all combined parts of the residuum for every interface
+    for pl = 1:size(IM,1)
+        ma=IM(pl,4);%master patch
+        for i = 1:size(patches(ma).Int,1)
+            if pl == patches(ma).Int(i,1)
+                s =  patches(ma).Int(i,5); %slave patch number
+                %position inside the slave patch interface matrix
+                for l = 1:size(patches(s).Int,1)
+                    if pl == patches(s).Int(l,1)
+                        p = l; %position inside the slave interface matrix
+                    else
+                    end
+                end
+                %calculate the extension operator for the current Interface
+                %if  D1_flag == 1 %calculation of the relation operator
+                %    Ts1m1 = pinv(patches(s).Extract_op(p).A1_1D) *patches(ma).Extract_op(i).A1_1D;
+                %else
+                %    Ts1m1 = pinv(patches(s).Extract_op(p).A1) *patches(ma).Extract_op(i).A1;
+                %end
+                %set the extension operator to a empty matrix
+                %Ts1m1 = [];
+                rsd_p = patches(ma).fint(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs)) - patches(ma).fext(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs)) +...
+                    patches(s).fint(intersect(patches(s).Int_Dofs(p).KP_f,patches(s).freeDofs)) - patches(s).fext(intersect(patches(s).Int_Dofs(p).KP_f,patches(s).freeDofs));
+                rsd = [rsd; rsd_p];
+            end
+        end
+        B = size(rsd,1);
+    end
+    %end residuum
+    rsn = norm(rsd);
+    fprintf(1, ' %4d, residuum_norm= %e\n', iter, rsn);
+    if rsn > tolerance
+        %begin stiffness matrix
+        J1 = zeros(A,size(rsd,1));
+        J2 = zeros(B-A,size(rsd,1));
+        %first fill the uncombined parts of every patch in ascending order
+        A = 0; %counting variable
+        %first the K_nn matrices of every patch
+        for pl = 1:np
+            NP = length(intersect(patches(pl).Int_Dofs(1).KP_n,patches(pl).freeDofs));%help variable for the sake of better reading
+            J1(1+A:NP+A,1+A:NP+A) = patches(pl).K_m(1).K_nn;
+            A = A + NP;
+        end
+        %second the K_nfi matrices of every patch
+        B = 0;
+        for pl = 1:np
+            for i = 1:size(patches(pl).Int,1)
+                NP = length(intersect(patches(pl).Int_Dofs(1).KP_n,patches(pl).freeDofs));%help variable for the sake of better reading
+                IN = patches(pl).Int(i,1); %number of the interface
+                [alpha,omega,m,p] = get_coloum_f(IN,IM); %indicies inside the stiffnes matrix
+%                 if pl == patches(pl).Int(i,3) | patches(pl).h_refinement_flag == 0 %calculation of the relation operator
+%                     Ts1m1 = eye(length(intersect(patches(pl).Int_Dofs(i).KP_f,patches(pl).freeDofs)));
+%                 else
+%                     if D1_flag ==1
+%                         Ts1m1 = pinv(patches(pl).Extract_op(i).A1_1D)*patches(m).Extract_op(p).A1_1D;
+%                     else
+%                         Ts1m1 = pinv(patches(pl).Extract_op(i).A1)*patches(m).Extract_op(p).A1;
+%                     end
+%                 end
+                J1(1+B:NP+B,alpha+1:omega) = patches(pl).K_m(i).K_nf;
+            end
+            B = B + NP;
+        end
+        %third all combined patches going over the interfaces
+        B = 0;
+        for pl = 1:size(IM,1)
+            ma=IM(pl,4);%master patch
+            for i = 1:size(patches(ma).Int,1)
+                if pl == patches(ma).Int(i,1)
+                    NF = length(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs)); %better reading
+                    s = patches(ma).Int(i,5); %slave patch
+                    %first the two K_fin matrices
+                    %master patch
+                    [alpha,omega] = get_coloum_n(PM,ma);
+                    J2(1+B:NF+B,alpha+1:omega) = patches(ma).K_m(i).K_fn;
+                    %slave patch
+                    %first find the index inside the slave interface
+                    %matrix
+                    for l = 1:size(patches(s).Int,1)
+                        if pl == patches(s).Int(l,1)
+                            p =l;
+                        end
+                    end
+                    %second get the extraction operator
+%                     if patches(s).h_refinement_flag ~= 0
+%                         if D1_flag == 1
+%                             Ts1m1 = pinv(patches(s).Extract_op(p).A1_1D) *patches(ma).Extract_op(i).A1_1D;
+%                         else
+%                             Ts1m1 = pinv(patches(s).Extract_op(p).A1) *patches(ma).Extract_op(i).A1;
+%                         end
+%                     else
+%                         if D1_flag == 1
+%                             Ts1m1 = eye(length(patches(s).Int_Dofs(p).KP_f)/2);
+%                         else
+%                             Ts1m1 = pinv(patches(s).Extract_op(p).A1) *patches(ma).Extract_op(i).A1;
+%                         end
+%                     end
+                    %sort the slave patch stiffnes matrix inside the
+                    %global stiffnes matrix
+                    [alpha,omega] = get_coloum_n(PM,s);
+                    J2(1+B:NF+B,alpha+1:omega) = patches(s).K_m(p).K_fn;
+                    %next the combined stiffnes matrices
+                    [alpha,omega,~,~] = get_coloum_f(patches(ma).Int(i,1),IM);
+                    J2(1+B:NF+B, alpha+1:omega) = patches(ma).K_m(i).K_ff + (patches(s).K_m(p).K_ff );
+                    %now all stiffnes matrices between the interface and
+                    %other interfaces of the master patch
+                    for j = 1:size(patches(ma).Int,1)
+                        if i ~=j
+                            %find the indicies of the corrsponding
+                            %interface matrix
+                            [alpha,omega,m,pfj] = get_coloum_f(patches(ma).Int(j,1),IM);
+                            %check if the patch is the master patch of
+                            %this interface
+%                             if m~=ma
+%                                 if D1_flag == 1
+%                                     Ts1m1fj = pinv(patches(ma).Extract_op(j).A1_1D)*patches(m).Extract_op(pfj).A1_1D;
+%                                 else
+%                                     Ts1m1fj = pinv(patches(ma).Extract_op(j).A1)*patches(m).Extract_op(pfj).A1;
+%                                 end
+%                             elseif m==ma
+%                                 if D1_flag ==1
+%                                     Ts1m1fj = eye(length(patches(ma).Int_Dofs(j).KP_f)/2);
+%                                 else
+%                                     Ts1m1fj = eye(length(patches(ma).Int_Dofs(j).KP_f));
+%                                 end
+%                             end
+                            K_fifj = patches(ma).K(patches(ma).Int_Dofs(i).KP_f,patches(ma).Int_Dofs(j).KP_f);
+                            
+                            J2(1+B:NF+B, alpha+1:omega) = K_fifj;
+                        end
+                    end
+                    %now the same for the slave patch
+                    %recalculate the extansion operator
+                    %Ts1m1I = pinv(patches(s).Extract_op(p).A1) *patches(ma).Extract_op(i).A1;
+                    for j = 1:size(patches(s).Int,1)
+                        if j ~= p
+                            %find the master patch and the indicies of
+                            %this interface
+                            [alpha,omega,m,pfj] = get_coloum_f(patches(s).Int(j,1),IM);
+                            %check if the patch is the master patch of
+                            %this interface
+%                             if m~=s
+%                                 if D1_flag == 1
+%                                     Ts1m1fj = pinv(patches(s).Extract_op(j).A1_1D)*patches(m).Extract_op(pfj).A1_1D;
+%                                 else
+%                                     Ts1m1fj = pinv(patches(s).Extract_op(j).A1)*patches(m).Extract_op(pfj).A1;
+%                                 end
+%                             elseif m==s
+%                                 if D1_flag == 1
+%                                     Ts1m1fj = eye(length(patches(s).Int_Dofs(j).KP_f)/2);
+%                                 else
+%                                     Ts1m1fj = eye(length(patches(s).Int_Dofs(j).KP_f));
+%                                 end
+%                             end
+                            K_fifj = patches(s).K(patches(s).Int_Dofs(p).KP_f,patches(s).Int_Dofs(j).KP_f);
+                            J2(1+B:NF+B, alpha+1:omega) = K_fifj;
+                        end
+                        
+                    end
+                    B = B + NF;
+                end
+            end
+        end
+        J = [J1; J2];
+        %calculate the displacement increments
+        du = -J\rsd;
+        %write the displacments into the patch structure
+        %first the u_n displacements for every patch
+        for pl = 1:np
+            %get the indicies of the patch
+            [alpha,omega] = get_coloum_n(PM,pl);
+            patches(pl).u(intersect(patches(pl).Int_Dofs(1).KP_n,patches(pl).freeDofs)) = patches(pl).u(intersect(patches(pl).Int_Dofs(1).KP_n,patches(pl).freeDofs)) + du((alpha+1):omega);
+            
+            
+        end
+        %then the u_f displacements in every interface using the T operator
+        for pl = 1:size(IM,1)
+            ma = IM(pl,4);
+            for i = 1:size(patches(ma).Int,1)
+                if pl==patches(ma).Int(i,1)
+                    %get the indicies of the master patch displacements
+                    [alpha,omega,m,p] = get_coloum_f(patches(ma).Int(i,1),IM);
+                    %write the master displacements inside the patch
+                    %structure
+                    patches(ma).u(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs)) = ...
+                        patches(ma).u(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs)) + du(alpha+1:omega);
+                    %get the slave patch and the indice inside the slave
+                    %interface matrix
+                    s = patches(ma).Int(i,5);
+                    for l = 1:size(patches(s).Int,1)
+                        if pl == patches(s).Int(l,1)
+                            p =l;
+                        end
+                    end
+                    %calculate the relation operator T and the slave
+                    %displacements inside the interface
+%                     if D1_flag == 1
+%                         Ts1m1 = pinv(patches(s).Extract_op(p).A1_1D)*patches(ma).Extract_op(i).A1_1D;
+%                     else
+%                         Ts1m1 = pinv(patches(s).Extract_op(p).A1)*patches(ma).Extract_op(i).A1;
+%                     end
+                    patches(s).u(intersect(patches(s).Int_Dofs(p).KP_f,patches(s).freeDofs)) = ...
+                        patches(ma).u(intersect(patches(ma).Int_Dofs(i).KP_f,patches(ma).freeDofs));
                 end
             end
         end
