@@ -19,7 +19,8 @@ set_paths_2 % for Linux
 % Remark: control points have to be sorted by curves in the input file!
 %chose input data
 %beam_2_materials_input_1;  %beam with a change of material
-beam_growing_top_input_1;   %beam with a growing top
+%beam_growing_top_input_1;   %beam with a growing top
+beam_growing_upper_top_input_1;   %beam with a growing upper top
 %D1_C0_C1_input_1;          %1-dimensional beam
 %plate_with_hole_input_1;   %plate with hole
 %truss_input_1;               %truss with no constant cross section
@@ -49,7 +50,7 @@ end
 % choose the desired conituity in the displacment field
 % 0 - C^0 continuity
 % 1 - C^1 continuity
-continuity_flag =0;
+continuity_flag =1;
 % choose if mesh should be modified by knot removal
 knot_removal_flag = 0;
 remove_knots=[];
@@ -207,7 +208,7 @@ tolerance     = 1e-7;             % residuum norm tolerance
 %third row x coordinates of the growth ending point
 %fourth row y coordinates of the growth ending point
 growth = [0    20;
-    1    1;
+    1.5    1.5;
     0   20;
     2    2];
 
@@ -220,7 +221,7 @@ for step = 1:nsteps
     
     % direct prescription of BCs to the control points of every patch
     for pl = 1:np
-        [fid,patches(pl).u_pre,patches(pl).f_pre,patches(pl).f_b,ttime,dt,loadcurve,D1_flag] = beam_growing_top_input_2(patches(pl).n,patches(pl).m,patches(pl).p,pl,step);
+        [fid,patches(pl).u_pre,patches(pl).f_pre,patches(pl).f_b,ttime,dt,loadcurve,D1_flag] = beam_growing_upper_top_input_2(patches(pl).n,patches(pl).m,patches(pl).p,pl,step);
         %% Build connectivities
         % construct IEN and INC array
         % for connectivity of local and global basis functions and NURBS coordinates
@@ -342,7 +343,7 @@ for step = 1:nsteps
                     
                     %wie bekomme ich die pysikalischen Koordinaten eines
                     %ganzen elements?
-                    if x_xi(2,1) > ylow
+                    if sign(ylow - x_xi(2,1))==-1
                         Death = 1e-6;
                     else
                         Death = 1;
